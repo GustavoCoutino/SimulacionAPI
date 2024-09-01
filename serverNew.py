@@ -180,7 +180,7 @@ class HarvestModel(ap.Model):
         self.crops_collected = set()  # Track which crops have been collected
         self.total_crops = 0  # Track the total number of crops
         self.collecter_path = []  # Store collector's path
-        self.harvesters_paths = []  # Store harvester's path
+        self.harvesters_paths = [[] for i in range(self.p['tractors'])]  # Store harvester's path
 
         self.target_harvester = 0
 
@@ -321,8 +321,8 @@ class HarvestModel(ap.Model):
         
         self.collecter_path.append(self.collecter.index)
 
-        for harvester in self.harvesters:
-            self.harvesters_paths.append(harvester.index)
+        for index, harvester in enumerate(self.harvesters):
+            self.harvesters_paths[index].append(harvester.index)
 
     # el modelo termina cuando el tractor ha pasado por todos los cultivos
     def update(self):
