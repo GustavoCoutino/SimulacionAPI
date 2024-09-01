@@ -3,7 +3,9 @@ import IPython
 import numpy as np
 import heapq
 import matplotlib.pyplot as plt
+from flask import Flask, jsonify
 
+app = Flask(__name__)
 
 class HarvestModel(ap.Model):
     def a_star(self, grid, start, goal, invalid_values):
@@ -54,22 +56,9 @@ class HarvestModel(ap.Model):
         # Move collector along A* path one step at a time
         if self.path_index < len(self.path):
             step = self.path[self.path_index]
-
-            # # Check if the collector will be on a crop to paint it as a crop when the collecter passes over it
-            # if self.aux_grid_matrix[step] == 1:
-            #     self.collecter.next_index_was1 = True
-            # else:
-            #     self.collecter.next_index_was1 = False
-
             self.collecter.last_index = self.collecter.index
             self.collecter.index = step
 
-            # # Update the grid
-            # if self.collecter.last_index != self.collecter.index:
-            #   # si en el paso anterior se detectó un cultivo en el siguiente step se marca como cultivo, si no se marca como 0
-            #   if self.collecter.next_index_was1:
-            #     self.aux_grid_matrix[self.collecter.last_index] = 1
-            #   else:
             self.aux_grid_matrix[self.collecter.last_index] = 0
 
             # Set the new position
@@ -190,6 +179,8 @@ class HarvestModel(ap.Model):
         self.refilling = False  # Track whether the collector is moving along the A* path to the gas station
         self.crops_collected = set()  # Track which crops have been collected
         self.total_crops = 0  # Track the total number of crops
+        self.collecter_path = []  # Store collector's path
+        self.harvesters_paths = []  # Store harvester's path
 
         self.target_harvester = 0
 
@@ -232,6 +223,10 @@ class HarvestModel(ap.Model):
         # Mark the grid with the crops
         for i in range(len(self.lista_coordenadas)):
             self.aux_grid_matrix[self.lista_coordenadas[i]] = 1
+            
+        # Save the initial state of the grid
+        self.initial_grid = self.aux_grid_matrix.copy()
+
 
     def step(self):
         if self.refilling:
@@ -266,10 +261,8 @@ class HarvestModel(ap.Model):
                 path_to_goal = self.a_star(
                     self.aux_grid_matrix, start, goal, {5, -1, 1}
                 )
-                # path_back = self.a_star(self.aux_grid_matrix, goal, start, {5, -1, 1})
 
-                # Combine the path to the goal and back to the start
-                self.path = path_to_goal  # + path_back
+                self.path = path_to_goal
 
                 # Remove the first coordinate from the path (usually the starting point)
                 if self.path:
@@ -294,12 +287,6 @@ class HarvestModel(ap.Model):
                     list_distances.append(distance)
 
                 if 1 in list_distances:
-
-                    # # aquí se revisa que el camino no sea nulo y se actualiza la posición del colector para que sea el segundo paso del camino
-                    # if len(path_to_tractor) > 1 and path_to_tractor[1] != self.harvesters[self.target_harvester].index:
-                    #   # se actualiza la posición del colector
-                    #   self.collecter.index = path_to_tractor[1]
-
                     # obtener lista de indices de los tractores que estan en capacidad 0
                     list_harvesters = []
                     for index, harvester in enumerate(self.harvesters):
@@ -331,13 +318,28 @@ class HarvestModel(ap.Model):
 
                     if self.collecter.index != self.collecter.last_index:
                         self.collecter.capacity -= 1
+        
+        self.collecter_path.append(self.collecter.index)
 
-        # print(self.aux_grid_matrix)
+        for harvester in self.harvesters:
+            self.harvesters_paths.append(harvester.index)
 
     # el modelo termina cuando el tractor ha pasado por todos los cultivos
     def update(self):
         if self.total_crops == len(self.crops_collected):
             self.stop()
+
+    def get_simulation_state(self):
+        initial_grid = self.initial_grid.tolist()
+        harvesters_paths = self.harvesters_paths
+        collector_path = self.collecter_path
+        state = {
+            "initial_grid": initial_grid,
+            "harvester_path": harvesters_paths,
+            "collector_path": collector_path,
+            "size" : self.p['size']
+        }
+        return state
 
 
 class Harvester(ap.Agent):
@@ -373,19 +375,24 @@ parameters = {
     "tractors": 4,
 }
 
-
-def my_plot(model, ax):
-    ax.clear()
-
-    ax.set_title(f"Step: {model.t}")
-    ax.imshow(model.aux_grid_matrix, cmap="ocean", interpolation="nearest")
-
-
-# Initialize the model and figure
-fig, ax = plt.subplots()
+# Initialize the model
 model = HarvestModel(parameters)
-# results = model.run()
+model.run()  # Ensure the setup method is called to initialize the model attributes
+simulation_state = model.get_simulation_state()
 
-# Run the animation
-animation = ap.animate(model, fig, ax, my_plot)
-IPython.display.HTML(animation.to_jshtml(fps=12))
+
+response = {
+    "status": "success",
+    "message": "Simulation data",
+    "data": simulation_state
+}
+
+@app.route('/simulate', methods=['GET'])
+def simulate():
+
+    # Get the current state after the simulation
+
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(debug=True)
